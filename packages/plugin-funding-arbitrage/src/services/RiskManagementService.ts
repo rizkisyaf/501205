@@ -19,14 +19,12 @@ export interface TradeValidation {
 }
 
 export interface RiskManagementConfig {
-    maxPositionSize: number;
+    maxLeverage: number;
     maxPositionsPerSymbol: number;
     maxTotalPositions: number;
-    maxLeverage: number;
     maxDrawdown: number;
-    stopLossPercentage: number;
     takeProfitPercentage: number;
-    maxDrawdownPercentage: number;
+    stopLossPercentage: number;
 }
 
 export class RiskManagementService {
@@ -41,7 +39,7 @@ export class RiskManagementService {
     private initialBalance: Decimal;
 
     constructor(config: RiskManagementConfig, initialBalance: number) {
-        this.maxPositionSize = new Decimal(config.maxPositionSize);
+        this.maxPositionSize = new Decimal(initialBalance).mul(0.1); // 10% of balance
         this.maxPositionsPerSymbol = config.maxPositionsPerSymbol;
         this.maxTotalPositions = config.maxTotalPositions;
         this.maxLeverage = config.maxLeverage;

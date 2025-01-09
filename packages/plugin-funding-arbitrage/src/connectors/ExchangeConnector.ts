@@ -7,6 +7,7 @@ export interface OrderParams {
     amount: string;
     price?: string;
     leverage: number;
+    recvWindow?: number;
 }
 
 export interface Ticker {
@@ -28,13 +29,16 @@ export abstract class ExchangeConnector {
     protected apiKey: string;
     protected apiSecret: string;
     protected testnet: boolean;
+    protected baseUrl: string;
 
     constructor(config: { apiKey: string; apiSecret: string; testnet?: boolean }) {
         this.apiKey = config.apiKey;
         this.apiSecret = config.apiSecret;
         this.testnet = config.testnet || false;
+        this.baseUrl = this.getBaseUrl();
     }
 
+    protected abstract getBaseUrl(): string;
     abstract init(): Promise<void>;
     abstract getFundingRate(symbol: string): Promise<string>;
     abstract getTicker(symbol: string): Promise<Ticker>;
@@ -46,11 +50,19 @@ export abstract class ExchangeConnector {
 
     protected handleError(error: any, context: string): never {
         const errorMessage = error.response?.data?.msg || error.message || "Unknown error";
-        logger.error(`${context} error: ${errorMessage}`);
+        logger.error(`${context} error: ${errorMessage}`, {
+            error,
+            context,
+            testnet: this.testnet
+        });
         throw new Error(`${context} failed: ${errorMessage}`);
     }
 
     protected normalizeSymbol(symbol: string): string {
-        return symbol.replace("-", "");
+        return symbol.replace('-PERP', '').replace('-', '').replace('/', '');
+    }
+
+    protected getRecvWindow(): number {
+        return this.testnet ? 60000 : 5000;
     }
 } 

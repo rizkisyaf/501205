@@ -1,27 +1,31 @@
 import { logger } from "../utils/logger";
 
-export interface SystemNotification {
-    type: "system_start" | "system_stop";
+interface TradeDetails {
+    exchange: string;
+    symbol: string;
+    side: string;
+    size: number | string;
+    price: number | string;
+}
+
+interface SystemNotification {
+    type: "system_start" | "system_stop" | "system_update";
     message: string;
     timestamp: string;
 }
 
-export interface TradeNotification {
-    type: "trade_executed" | "trade_closed";
+interface TradeNotification {
+    type: "trade_executed" | "trade_closed" | "trade_failed";
     message: string;
+    trade: TradeDetails;
+    details?: Record<string, any>;
     timestamp: string;
-    details: {
-        longExchange: string;
-        shortExchange: string;
-        symbol: string;
-        size: string;
-        leverage: number;
-    };
 }
 
-export interface ErrorNotification {
+interface ErrorNotification {
     type: "system_error" | "trade_error";
     message: string;
+    error: string;
     timestamp: string;
 }
 
@@ -31,16 +35,16 @@ export interface NotificationConfig {
         botToken?: string;
         chatId?: string;
     };
-    discord?: {
-        webhookUrl?: string;
-    };
 }
 
 export class NotificationService {
-    private config: NotificationConfig;
+    private readonly config: NotificationConfig;
 
     constructor(config: NotificationConfig) {
-        this.config = config;
+        this.config = {
+            enabled: config.enabled || false,
+            telegram: config.telegram
+        };
     }
 
     async sendSystemNotification(notification: SystemNotification): Promise<void> {
@@ -48,13 +52,8 @@ export class NotificationService {
             return;
         }
 
-        try {
-            logger.info(`[${notification.type}] ${notification.message}`);
-            await this.sendToTelegram(notification);
-            await this.sendToDiscord(notification);
-        } catch (error) {
-            logger.error("Error sending system notification:", error);
-        }
+        const message = this.formatMessage(notification);
+        await this.sendToTelegram(message);
     }
 
     async sendTradeNotification(notification: TradeNotification): Promise<void> {
@@ -62,13 +61,8 @@ export class NotificationService {
             return;
         }
 
-        try {
-            logger.info(`[${notification.type}] ${notification.message}`, notification.details);
-            await this.sendToTelegram(notification);
-            await this.sendToDiscord(notification);
-        } catch (error) {
-            logger.error("Error sending trade notification:", error);
-        }
+        const message = this.formatMessage(notification);
+        await this.sendToTelegram(message);
     }
 
     async sendErrorNotification(notification: ErrorNotification): Promise<void> {
@@ -76,30 +70,51 @@ export class NotificationService {
             return;
         }
 
-        try {
-            logger.error(`[${notification.type}] ${notification.message}`);
-            await this.sendToTelegram(notification);
-            await this.sendToDiscord(notification);
-        } catch (error) {
-            logger.error("Error sending error notification:", error);
-        }
+        const message = this.formatMessage(notification);
+        await this.sendToTelegram(message);
     }
 
-    private async sendToTelegram(notification: SystemNotification | TradeNotification | ErrorNotification): Promise<void> {
-        if (!this.config.telegram?.botToken || !this.config.telegram?.chatId) {
-            return;
+    private formatMessage(notification: SystemNotification | TradeNotification | ErrorNotification): string {
+        const header = `<b>[${notification.type}]</b>\n`;
+        
+        if ('error' in notification) {
+            return `${header}${notification.message}\n\nError: ${notification.error}`;
         }
 
+        if ('trade' in notification) {
+            const trade = notification.trade;
+            return `${header}${notification.message}\n\nTrade Details:\n` +
+                `Exchange: ${trade.exchange}\n` +
+                `Symbol: ${trade.symbol}\n` +
+                `Side: ${trade.side}\n` +
+                `Size: ${trade.size}\n` +
+                `Price: ${trade.price}\n` +
+                `Timestamp: ${notification.timestamp}`;
+        }
+
+        return `${header}${notification.message}`;
+    }
+
+    private async sendToTelegram(message: string): Promise<void> {
         try {
-            const message = this.formatMessage(notification);
-            const url = `https://api.telegram.org/bot${this.config.telegram.botToken}/sendMessage`;
+            const botToken = this.config.telegram?.botToken;
+            const chatId = this.config.telegram?.chatId;
+
+            if (!botToken || !chatId) {
+                logger.warn("Telegram notifications not configured properly. Missing botToken or chatId");
+                return;
+            }
+
+            const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+            logger.debug("Sending Telegram notification:", message, { chatId, url });
+
             const response = await fetch(url, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    chat_id: this.config.telegram.chatId,
+                    chat_id: chatId,
                     text: message,
                     parse_mode: "HTML"
                 })
@@ -108,46 +123,11 @@ export class NotificationService {
             if (!response.ok) {
                 throw new Error(`Telegram API error: ${response.statusText}`);
             }
+
+            const result = await response.json();
+            logger.debug("Telegram notification sent successfully:", result);
         } catch (error) {
             logger.error("Error sending Telegram notification:", error);
         }
-    }
-
-    private async sendToDiscord(notification: SystemNotification | TradeNotification | ErrorNotification): Promise<void> {
-        if (!this.config.discord?.webhookUrl) {
-            return;
-        }
-
-        try {
-            const message = this.formatMessage(notification);
-            const response = await fetch(this.config.discord.webhookUrl, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    content: message
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Discord API error: ${response.statusText}`);
-            }
-        } catch (error) {
-            logger.error("Error sending Discord notification:", error);
-        }
-    }
-
-    private formatMessage(notification: SystemNotification | TradeNotification | ErrorNotification): string {
-        let message = `<b>[${notification.type}]</b>\n${notification.message}`;
-
-        if ("details" in notification) {
-            message += "\n\nDetails:";
-            for (const [key, value] of Object.entries(notification.details)) {
-                message += `\n${key}: ${value}`;
-            }
-        }
-
-        return message;
     }
 } 

@@ -12,7 +12,7 @@ const myFormat = printf(({ level, message, timestamp, ...metadata }) => {
 });
 
 export const logger = winston.createLogger({
-    level: 'info',
+    level: 'debug',
     format: combine(
         colorize(),
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -20,6 +20,7 @@ export const logger = winston.createLogger({
     ),
     transports: [
         new winston.transports.Console({
+            level: 'debug',
             format: combine(
                 colorize(),
                 timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),

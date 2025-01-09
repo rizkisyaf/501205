@@ -1,9 +1,12 @@
-import { Character, ModelProviderName } from "./types.ts";
+import { Character, ModelProviderName, Plugin } from "./types.ts";
 
 export const defaultCharacter: Character = {
     name: "501205",
     username: "501205",
-    plugins: [],
+    plugins: [{
+        name: "@501205/plugin-funding-arbitrage",
+        description: "Plugin for executing funding rate arbitrage strategies across exchanges"
+    }],
     clients: [],
     modelProvider: ModelProviderName.LLAMALOCAL,
     settings: {

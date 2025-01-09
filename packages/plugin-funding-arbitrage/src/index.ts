@@ -1,6 +1,5 @@
 import { FundingArbitrageAgent } from './agent/FundingArbitrageAgent';
-import { DEFAULT_CONFIG, PluginConfigSchema } from './config';
-import type { PluginConfig } from './config';
+import { DEFAULT_CONFIG } from './config';
 import type { ExchangeConnector, MarketData, TradeRequest, ExchangeConfig } from './connectors';
 import { BinanceConnector, BybitConnector, OKXConnector, createConnector } from './connectors';
 import type { Position } from './types';
@@ -8,11 +7,17 @@ import { MarketDataService } from './services/MarketDataService';
 import { RiskManagementService } from './services/RiskManagementService';
 import { NotificationService } from './services/NotificationService';
 import { TradeExecutionService } from './services/TradeExecutionService';
+import { logger } from './utils/logger';
+import { main } from './example';
+
+// Run the main function
+main().catch(error => {
+    logger.error('Unhandled error:', error);
+    process.exit(1);
+});
 
 export {
     FundingArbitrageAgent,
-    PluginConfig,
-    PluginConfigSchema,
     DEFAULT_CONFIG,
     ExchangeConnector,
     MarketData,

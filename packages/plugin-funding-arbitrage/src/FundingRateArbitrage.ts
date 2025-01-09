@@ -71,7 +71,8 @@ export class FundingRateArbitrage {
             logger.error("Error starting agent:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error starting agent: ${error}`,
+                message: "Error starting agent",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
             throw error;
@@ -102,7 +103,8 @@ export class FundingRateArbitrage {
             logger.error("Error stopping agent:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error stopping agent: ${error}`,
+                message: "Error stopping agent",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
             throw error;
@@ -147,7 +149,8 @@ export class FundingRateArbitrage {
             logger.error("Error in monitoring loop:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error in monitoring loop: ${error}`,
+                message: "Error in monitoring loop",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }
@@ -190,7 +193,8 @@ export class FundingRateArbitrage {
             logger.error("Error executing arbitrage:", error);
             await this.notificationService.sendErrorNotification({
                 type: "trade_error",
-                message: `Error executing arbitrage: ${error}`,
+                message: "Error executing arbitrage",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }
@@ -227,7 +231,8 @@ export class FundingRateArbitrage {
             logger.error("Error managing positions:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error managing positions: ${error}`,
+                message: "Error managing positions",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }
@@ -258,7 +263,8 @@ export class FundingRateArbitrage {
             logger.error("Error closing position:", error);
             await this.notificationService.sendErrorNotification({
                 type: "trade_error",
-                message: `Error closing position: ${error}`,
+                message: "Error closing position",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }

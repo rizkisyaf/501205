@@ -2,10 +2,11 @@ import { logger } from "../utils/logger";
 import { PluginConfig } from "../config";
 import { ExchangeConnector } from "../connectors";
 import { MarketDataService } from "../services/MarketDataService";
-import { RiskManagementService, RiskManagementConfig } from "../services/RiskManagementService";
-import { NotificationService, NotificationConfig } from "../services/NotificationService";
+import { RiskManagementService } from "../services/RiskManagementService";
+import { NotificationService } from "../services/NotificationService";
 import { TradeExecutionService } from "../services/TradeExecutionService";
 import { Position } from "../types";
+import { FundingRateScreener } from "../FundingRateScreener";
 import Decimal from "decimal.js";
 import { DateTime } from "luxon";
 
@@ -16,6 +17,7 @@ export class FundingArbitrageAgent {
     private riskManagementService: RiskManagementService;
     private notificationService: NotificationService;
     private tradeExecutionService: TradeExecutionService;
+    private screener: FundingRateScreener;
     private isRunning: boolean = false;
     private monitoringInterval: NodeJS.Timeout | null = null;
 
@@ -27,18 +29,24 @@ export class FundingArbitrageAgent {
         this.connectors = connectors;
         this.marketDataService = new MarketDataService(connectors);
         this.riskManagementService = new RiskManagementService(
-            config.riskManagement as RiskManagementConfig,
+            config.riskManagement,
             config.initialBalance
         );
         this.notificationService = new NotificationService({
             enabled: true,
-            ...config.notifications
+            telegram: config.notifications.telegram
         });
         this.tradeExecutionService = new TradeExecutionService(
             connectors,
             this.riskManagementService,
             this.notificationService
         );
+        this.screener = new FundingRateScreener();
+
+        // Listen for screener updates
+        this.screener.on('update', (opportunities) => {
+            logger.info('New opportunities found:', opportunities);
+        });
     }
 
     async start(): Promise<void> {
@@ -55,8 +63,10 @@ export class FundingArbitrageAgent {
                 timestamp: DateTime.now().toISO()
             });
 
-            // Initial market data update
-            await this.marketDataService.fetchMarketData(this.config.symbols);
+            // Start screener auto-refresh
+            if (this.config.screener.enabled) {
+                this.screener.startAutoRefresh(this.config.screener.refreshInterval);
+            }
 
             // Start monitoring loop
             this.monitoringInterval = setInterval(
@@ -70,7 +80,8 @@ export class FundingArbitrageAgent {
             logger.error("Error starting agent:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error starting agent: ${error}`,
+                message: "Error starting agent",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
             throw error;
@@ -101,7 +112,8 @@ export class FundingArbitrageAgent {
             logger.error("Error stopping agent:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error stopping agent: ${error}`,
+                message: "Error stopping agent",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
             throw error;
@@ -110,33 +122,33 @@ export class FundingArbitrageAgent {
 
     private async monitor(): Promise<void> {
         try {
-            // Update market data
-            await this.marketDataService.fetchMarketData(this.config.symbols);
+            // Get top opportunities from screener
+            const opportunities = this.screener.getTopOpportunities(this.config.screener.maxOpportunities);
 
-            // Find arbitrage opportunities
-            const opportunities = this.marketDataService.findArbitrageOpportunities(
-                this.config.symbols,
-                this.config.minFundingDiff,
-                this.config.minProfitThreshold
-            );
-
-            // Sort opportunities by expected profit
-            opportunities.sort((a, b) =>
-                b.expectedProfit.minus(a.expectedProfit).toNumber()
+            // Filter opportunities based on minimum spread threshold
+            const validOpportunities = opportunities.filter(opp => 
+                opp.rawSpread >= this.config.screener.minSpreadThreshold &&
+                opp.synced
             );
 
             // Process opportunities
-            for (const opportunity of opportunities) {
+            for (const opportunity of validOpportunities) {
                 logger.info("Found arbitrage opportunity:", {
                     symbol: opportunity.symbol,
                     longExchange: opportunity.longExchange,
                     shortExchange: opportunity.shortExchange,
-                    fundingDiff: opportunity.fundingDiff.toString(),
-                    expectedProfit: opportunity.expectedProfit.toString()
+                    fundingDiff: opportunity.rawSpread.toString(),
+                    expectedProfit: (opportunity.rawSpread * this.config.basePositionSize).toString()
                 });
 
                 if (this.config.tradingEnabled) {
-                    await this.executeArbitrage(opportunity);
+                    await this.executeArbitrage({
+                        symbol: opportunity.symbol,
+                        longExchange: opportunity.longExchange,
+                        shortExchange: opportunity.shortExchange,
+                        fundingDiff: new Decimal(opportunity.rawSpread),
+                        expectedProfit: new Decimal(opportunity.rawSpread).mul(this.config.basePositionSize)
+                    });
                 }
             }
 
@@ -146,7 +158,8 @@ export class FundingArbitrageAgent {
             logger.error("Error in monitoring loop:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error in monitoring loop: ${error}`,
+                message: "Error in monitoring loop",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }
@@ -189,7 +202,8 @@ export class FundingArbitrageAgent {
             logger.error("Error executing arbitrage:", error);
             await this.notificationService.sendErrorNotification({
                 type: "trade_error",
-                message: `Error executing arbitrage: ${error}`,
+                message: "Error executing arbitrage",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }
@@ -226,7 +240,8 @@ export class FundingArbitrageAgent {
             logger.error("Error managing positions:", error);
             await this.notificationService.sendErrorNotification({
                 type: "system_error",
-                message: `Error managing positions: ${error}`,
+                message: "Error managing positions",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }
@@ -235,7 +250,12 @@ export class FundingArbitrageAgent {
     private async getAllPositions(): Promise<Position[]> {
         const positions: Position[] = [];
         for (const [exchange, connector] of this.connectors) {
-            for (const symbol of this.config.symbols) {
+            // Get all symbols from screener opportunities
+            const opportunities = this.screener.getTopOpportunities();
+            const symbols = [...new Set(opportunities.map(opp => opp.symbol))];
+            
+            // Get positions for each symbol
+            for (const symbol of symbols) {
                 const position = await connector.getPosition(symbol);
                 if (position) {
                     positions.push(position);
@@ -252,12 +272,29 @@ export class FundingArbitrageAgent {
                 throw new Error(`No connector found for exchange ${position.exchange}`);
             }
 
-            await connector.closePosition(position.symbol);
+            const success = await connector.closePosition(position.symbol);
+            if (!success) {
+                throw new Error(`Failed to close position for ${position.symbol} on ${position.exchange}`);
+            }
+
+            await this.notificationService.sendTradeNotification({
+                type: "trade_closed",
+                message: `Closed position for ${position.symbol} on ${position.exchange}`,
+                trade: {
+                    exchange: position.exchange,
+                    symbol: position.symbol,
+                    side: position.side,
+                    size: position.size.toString(),
+                    price: position.entryPrice.toString()
+                },
+                timestamp: DateTime.now().toISO()
+            });
         } catch (error) {
             logger.error("Error closing position:", error);
             await this.notificationService.sendErrorNotification({
                 type: "trade_error",
-                message: `Error closing position: ${error}`,
+                message: "Error closing position",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
         }

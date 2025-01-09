@@ -20,7 +20,7 @@
         "dist"
     ],
     "scripts": {
-        "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:onnxruntime-node --external:better-sqlite3 && tsc --emitDeclarationOnly",
+        "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:onnxruntime-node --external:better-sqlite3 --external:@anush008/tokenizers-darwin-universal && tsc --emitDeclarationOnly",
         "lint": "eslint --fix  --cache .",
         "watch": "tsc --watch",
         "dev": "tsc --watch",

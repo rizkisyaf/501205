@@ -1,56 +1,55 @@
-import { z } from 'zod';
-import { ExchangeConfig } from './types';
+import { NotificationConfig } from './services/NotificationService';
 
-export const RiskManagementConfigSchema = z.object({
-    maxPositionSize: z.number().min(0),
-    maxPositionsPerSymbol: z.number().min(0),
-    maxTotalPositions: z.number().min(0),
-    maxLeverage: z.number().min(1),
-    maxDrawdown: z.number().min(0).max(1),
-    stopLossPercentage: z.number().min(0).max(100),
-    takeProfitPercentage: z.number().min(0),
-    maxDrawdownPercentage: z.number().min(0).max(100)
-});
+export interface PluginConfig {
+    exchanges: {
+        [key: string]: {
+            apiKey?: string;
+            apiSecret?: string;
+            testnet?: boolean;
+        };
+    };
+    
+    symbols: string[];
+    
+    screener: {
+        enabled: boolean;
+        refreshInterval: number;
+        maxOpportunities: number;
+        minSpreadThreshold: number;
+        syncThreshold: number;
+    };
 
-export const NotificationConfigSchema = z.object({
-    enabled: z.boolean(),
-    telegram: z.object({
-        botToken: z.string().optional(),
-        chatId: z.string().optional()
-    }).optional(),
-    discord: z.object({
-        webhookUrl: z.string().optional()
-    }).optional()
-});
+    initialBalance: number;
+    basePositionSize: number;
+    maxPositionSize: number;
+    maxPositionSizePercent: number;
+    maxSizeMultiplier: number;
+    defaultLeverage: number;
+    minFundingDiff: number;
+    minProfitThreshold: number;
 
-export const PluginConfigSchema = z.object({
-    symbols: z.array(z.string()),
-    exchanges: z.record(z.string(), z.object({
-        apiKey: z.string(),
-        apiSecret: z.string(),
-        testnet: z.boolean().optional(),
-        passphrase: z.string().optional()
-    })),
-    basePositionSize: z.number().min(0),
-    maxPositionSize: z.number().min(0),
-    maxPositionSizePercent: z.number().min(0).max(1),
-    maxSizeMultiplier: z.number().min(1),
-    minFundingDiff: z.number().min(0),
-    minProfitThreshold: z.number().min(0),
-    defaultLeverage: z.number().min(1).max(100),
-    initialBalance: z.number().min(0),
-    riskManagement: RiskManagementConfigSchema,
-    notifications: NotificationConfigSchema,
-    monitoringInterval: z.number().min(1000),
-    tradingEnabled: z.boolean()
-});
+    riskManagement: {
+        maxLeverage: number;
+        maxPositionsPerSymbol: number;
+        maxTotalPositions: number;
+        maxDrawdown: number;
+        takeProfitPercentage: number;
+        stopLossPercentage: number;
+    };
 
-export type RiskManagementConfig = z.infer<typeof RiskManagementConfigSchema>;
-export type NotificationConfig = z.infer<typeof NotificationConfigSchema>;
-export type PluginConfig = z.infer<typeof PluginConfigSchema>;
+    notifications: {
+        enabled: boolean;
+        telegram?: {
+            botToken?: string;
+            chatId?: string;
+        };
+    };
+
+    monitoringInterval: number;
+    tradingEnabled: boolean;
+}
 
 export const DEFAULT_CONFIG: PluginConfig = {
-    symbols: ['BTC-PERP', 'ETH-PERP'],
     exchanges: {
         binance: {
             apiKey: process.env.BINANCE_API_KEY || '',
@@ -61,42 +60,39 @@ export const DEFAULT_CONFIG: PluginConfig = {
             apiKey: process.env.BYBIT_API_KEY || '',
             apiSecret: process.env.BYBIT_API_SECRET || '',
             testnet: true
-        },
-        okx: {
-            apiKey: process.env.OKX_API_KEY || '',
-            apiSecret: process.env.OKX_API_SECRET || '',
-            passphrase: process.env.OKX_PASSPHRASE || '',
-            testnet: true
         }
     },
-    basePositionSize: 100,
-    maxPositionSize: 1000,
-    maxPositionSizePercent: 0.1,
+    screener: {
+        enabled: true,
+        refreshInterval: 60000,
+        maxOpportunities: 5,
+        minSpreadThreshold: 0.001,
+        syncThreshold: 0.0005
+    },
+    initialBalance: 10000,
+    basePositionSize: 1000,
+    maxPositionSize: 10000,
+    maxPositionSizePercent: 10,
     maxSizeMultiplier: 1.5,
-    minFundingDiff: 0.001, // 0.1%
-    minProfitThreshold: 0.002, // 0.2%
-    defaultLeverage: 3,
-    initialBalance: 1000,
+    defaultLeverage: 1,
+    minFundingDiff: 0.001,
+    minProfitThreshold: 100,
     riskManagement: {
-        maxPositionSize: 1000,
+        maxLeverage: 10,
         maxPositionsPerSymbol: 2,
         maxTotalPositions: 6,
-        maxLeverage: 3,
         maxDrawdown: 0.1,
-        stopLossPercentage: 2,
-        takeProfitPercentage: 5,
-        maxDrawdownPercentage: 10
+        takeProfitPercentage: 0.01,
+        stopLossPercentage: 0.02
     },
     notifications: {
         enabled: true,
         telegram: {
-            botToken: process.env.TELEGRAM_BOT_TOKEN,
-            chatId: process.env.TELEGRAM_CHAT_ID
-        },
-        discord: {
-            webhookUrl: process.env.DISCORD_WEBHOOK
+            botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+            chatId: process.env.TELEGRAM_CHAT_ID || ''
         }
     },
     monitoringInterval: 60000,
-    tradingEnabled: true
+    tradingEnabled: true,
+    symbols: ['BTC-PERP', 'ETH-PERP', 'SOL-PERP']
 }; 

@@ -1,0 +1,1 @@
+private getEndpointPath(path: string): string { const basePath = this.testnet ? "/futures/api" : "/fapi"; return `${basePath}${path}`; }

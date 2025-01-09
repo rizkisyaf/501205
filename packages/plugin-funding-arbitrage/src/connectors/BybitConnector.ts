@@ -3,6 +3,7 @@ import { Position } from "../types";
 import Decimal from "decimal.js";
 import { logger } from "../utils/logger";
 import { DateTime } from "luxon";
+import { createHmac } from 'crypto';
 
 interface BybitResponse<T> {
     retCode: number;
@@ -67,23 +68,124 @@ export class BybitConnector implements ExchangeConnector {
     private readonly baseUrl: string;
 
     constructor(config: ExchangeConfig) {
-        this.apiKey = config.apiKey;
-        this.apiSecret = config.apiSecret;
-        this.testnet = config.testnet || false;
-        this.baseUrl = this.testnet
+        this.apiKey = config.apiKey || '';
+        this.apiSecret = config.apiSecret || '';
+        this.testnet = true; // Force testnet for safety
+        this.baseUrl = this.getBaseUrl();
+        logger.info('Initializing Bybit connector with testnet:', { 
+            testnet: this.testnet,
+            apiKeyLength: this.apiKey.length 
+        });
+    }
+
+    protected getBaseUrl(): string {
+        const url = this.testnet
             ? "https://api-testnet.bybit.com"
             : "https://api.bybit.com";
+        logger.debug(`Using Bybit ${this.testnet ? 'testnet' : 'mainnet'} URL: ${url}`);
+        return url;
+    }
+
+    private getEndpointPath(path: string): string {
+        return `/v5${path}`; // Add /v5 prefix for all endpoints
+    }
+
+    private getRecvWindow(): number {
+        return this.testnet ? 60000 : 5000;
+    }
+
+    private sign(data: string): string {
+        return createHmac('sha256', this.apiSecret)
+            .update(data)
+            .digest('hex');
+    }
+
+    private async publicRequest(endpoint: string, params: URLSearchParams = new URLSearchParams()): Promise<any> {
+        try {
+            const url = `${this.getBaseUrl()}${this.getEndpointPath(endpoint)}`;
+            const finalUrl = `${url}?${params.toString()}`;
+            
+            logger.debug('Making public request:', {
+                url: finalUrl,
+                testnet: this.testnet
+            });
+
+            const response = await fetch(finalUrl);
+            const responseText = await response.text();
+
+            if (!response.ok) {
+                throw new Error(`Bybit API error: ${response.statusText} - ${responseText}`);
+            }
+
+            return JSON.parse(responseText);
+        } catch (error) {
+            logger.error(`Bybit API request failed: ${error}`);
+            throw error;
+        }
+    }
+
+    private async signedRequest(endpoint: string, params: URLSearchParams = new URLSearchParams(), method: string = 'GET'): Promise<any> {
+        try {
+            const timestamp = Date.now().toString();
+            params.append('timestamp', timestamp);
+            params.append('recv_window', this.getRecvWindow().toString());
+            params.append('api_key', this.apiKey);
+
+            const signature = this.sign(params.toString());
+            params.append('sign', signature);
+
+            const url = `${this.getBaseUrl()}${this.getEndpointPath(endpoint)}`;
+            const finalUrl = method === 'GET' ? `${url}?${params.toString()}` : url;
+            
+            logger.debug('Making signed request:', {
+                url: finalUrl,
+                method,
+                params: params.toString(),
+                testnet: this.testnet
+            });
+
+            const headers: Record<string, string> = {
+                'X-BAPI-API-KEY': this.apiKey,
+                'X-BAPI-SIGN': signature,
+                'X-BAPI-TIMESTAMP': timestamp,
+                'X-BAPI-RECV-WINDOW': this.getRecvWindow().toString()
+            };
+
+            if (method !== 'GET') {
+                headers['Content-Type'] = 'application/x-www-form-urlencoded';
+            }
+
+            const response = await fetch(finalUrl, {
+                method,
+                headers,
+                ...(method !== 'GET' && { body: params.toString() })
+            });
+
+            const responseText = await response.text();
+            if (!response.ok) {
+                throw new Error(`Bybit API error: ${response.statusText} - ${responseText}`);
+            }
+
+            return JSON.parse(responseText);
+        } catch (error) {
+            logger.error(`Bybit API request failed: ${error}`);
+            throw error;
+        }
     }
 
     async fetchMarketData(symbol: string): Promise<MarketData> {
         try {
-            const response = await fetch(`${this.baseUrl}/v5/market/tickers?category=linear&symbol=${symbol}`);
-            if (!response.ok) {
-                throw new Error(`Bybit API error: ${response.statusText}`);
+            const params = new URLSearchParams({
+                symbol: this.normalizeSymbol(symbol),
+                category: 'linear'
+            });
+
+            const data = await this.publicRequest('/market/tickers', params);
+            if (!data.result.list || data.result.list.length === 0) {
+                throw new Error(`No market data available for ${symbol}`);
             }
-            const data = await response.json() as BybitResponse<BybitTickerResult>;
+
             const ticker = data.result.list[0];
-            
             const fundingRate = await this.fetchFundingRate(symbol);
             
             return {
@@ -101,16 +203,27 @@ export class BybitConnector implements ExchangeConnector {
 
     async fetchFundingRate(symbol: string): Promise<Decimal> {
         try {
-            const response = await fetch(`${this.baseUrl}/v5/market/funding/history?category=linear&symbol=${symbol}&limit=1`);
-            if (!response.ok) {
-                throw new Error(`Bybit API error: ${response.statusText}`);
+            const params = new URLSearchParams({
+                symbol: this.normalizeSymbol(symbol),
+                category: 'linear',
+                limit: '1'
+            });
+
+            const data = await this.publicRequest('/market/funding/history', params);
+            if (!data.result.list || data.result.list.length === 0) {
+                logger.warn(`No funding rate data available for ${symbol}`);
+                return new Decimal(0);
             }
-            const data = await response.json() as BybitResponse<BybitFundingResult>;
-            return new Decimal(data.result.list[0].fundingRate);
+            return new Decimal(data.result.list[0].fundingRate || 0);
         } catch (error) {
             logger.error("Error fetching Bybit funding rate:", error);
             throw error;
         }
+    }
+
+    private normalizeSymbol(symbol: string): string {
+        // Convert BTCUSDT to BTCUSDT for Bybit (no conversion needed)
+        return symbol;
     }
 
     async executeTrade(request: TradeRequest): Promise<Position> {
@@ -121,7 +234,7 @@ export class BybitConnector implements ExchangeConnector {
             const timestamp = Date.now().toString();
             const params = new URLSearchParams({
                 category: "linear",
-                symbol: request.symbol,
+                symbol: this.normalizeSymbol(request.symbol),
                 side: request.side === "long" ? "Buy" : "Sell",
                 orderType: request.limitPrice ? "Limit" : "Market",
                 qty: request.size.toString(),
@@ -176,7 +289,7 @@ export class BybitConnector implements ExchangeConnector {
             const timestamp = Date.now().toString();
             const params = new URLSearchParams({
                 category: "linear",
-                symbol,
+                symbol: this.normalizeSymbol(symbol),
                 timestamp
             });
 
@@ -278,7 +391,7 @@ export class BybitConnector implements ExchangeConnector {
             const timestamp = Date.now().toString();
             const params = new URLSearchParams({
                 category: "linear",
-                symbol,
+                symbol: this.normalizeSymbol(symbol),
                 buyLeverage: leverage.toString(),
                 sellLeverage: leverage.toString(),
                 timestamp
@@ -302,13 +415,5 @@ export class BybitConnector implements ExchangeConnector {
             logger.error("Error setting Bybit leverage:", error);
             return false;
         }
-    }
-
-    private sign(queryString: string): string {
-        const crypto = require('crypto');
-        return crypto
-            .createHmac('sha256', this.apiSecret)
-            .update(queryString)
-            .digest('hex');
     }
 } 

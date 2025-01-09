@@ -77,6 +77,13 @@ export class TradeExecutionService {
                 type: "trade_executed",
                 message: `Arbitrage trade executed for ${longTrade.symbol}`,
                 timestamp: DateTime.now().toISO(),
+                trade: {
+                    exchange: longTrade.exchange,
+                    symbol: longTrade.symbol,
+                    side: longTrade.side,
+                    size: longTrade.size.toString(),
+                    price: longTrade.limitPrice?.toString() || "market"
+                },
                 details: {
                     longExchange: longTrade.exchange,
                     shortExchange: shortTrade.exchange,
@@ -91,7 +98,8 @@ export class TradeExecutionService {
             logger.error("Error executing arbitrage trade:", error);
             await this.notificationService.sendErrorNotification({
                 type: "trade_error",
-                message: `Error executing arbitrage trade: ${error}`,
+                message: "Error executing arbitrage trade",
+                error: error instanceof Error ? error.message : String(error),
                 timestamp: DateTime.now().toISO()
             });
             return false;
