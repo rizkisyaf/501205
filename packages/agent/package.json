@@ -1,0 +1,18 @@
+{
+  "name": "@elizaos/agent",
+  "version": "0.1.7",
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@501205/plugin-funding-arbitrage": "workspace:*",
+    "@elizaos/adapter-sqlite": "^0.1.7",
+    "@elizaos/client-direct": "workspace:*",
+    "@elizaos/core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  }
+}

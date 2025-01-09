@@ -26,14 +26,18 @@
         "customConditions": [
             "@elizaos/source"
         ],
+        "composite": true,
+        "declarationMap": true
     },
     "include": [
-        "src/**/*"
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.json"
     ],
     "exclude": [
         "node_modules",
         "dist",
-        "src/**/*.d.ts",
-        "types/**/*.test.ts"
+        "src/tests/**/*",
+        "src/test_resources/**/*"
     ]
 }

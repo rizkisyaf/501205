@@ -5,11 +5,17 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     clean: true,
-    format: ["esm"], // Ensure you're targeting CommonJS
+    format: ["esm"],
+    dts: {
+        entry: {
+            index: "src/index.ts"
+        },
+        resolve: true
+    },
     external: [
-        "dotenv", // Externalize dotenv to prevent bundling
-        "fs", // Externalize fs to use Node.js built-in module
-        "path", // Externalize other built-ins if necessary
+        "dotenv",
+        "fs",
+        "path",
         "@reflink/reflink",
         "@node-llama-cpp",
         "https",
@@ -18,6 +24,5 @@ export default defineConfig({
         "form-data",
         "axios",
         "agentkeepalive",
-        // Add other modules you want to externalize
     ],
 });

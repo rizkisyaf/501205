@@ -20,10 +20,10 @@
         "dist"
     ],
     "scripts": {
-        "build": "tsup --format esm --dts",
+        "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:onnxruntime-node --external:better-sqlite3 && tsc --emitDeclarationOnly",
         "lint": "eslint --fix  --cache .",
         "watch": "tsc --watch",
-        "dev": "tsup --format esm --dts --watch",
+        "dev": "tsc --watch",
         "build:docs": "cd docs && pnpm run build",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
@@ -61,8 +61,9 @@
         "ts-jest": "29.2.5",
         "ts-node": "10.9.2",
         "tslib": "2.8.1",
-        "tsup": "8.3.5",
-        "typescript": "5.6.3"
+        "tsup": "^8.0.0",
+        "typescript": "5.6.3",
+        "esbuild": "^0.20.0"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "0.0.56",

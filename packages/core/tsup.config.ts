@@ -5,21 +5,24 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     clean: true,
-    format: ["esm"], // Ensure you're targeting CommonJS
+    format: ["esm"],
     platform: "node",
     target: "node18",
     bundle: true,
-    splitting: true, // Add this for better code splitting
-    dts: true, // Generate declaration files
+    splitting: false,
+    dts: true,
+    treeshake: true,
     external: [
-        "dotenv", // Externalize dotenv to prevent bundling
-        "fs", // Externalize fs to use Node.js built-in module
-        "path", // Externalize other built-ins if necessary
+        "dotenv",
+        "fs",
+        "path",
         "http",
         "https",
-        // Add other modules you want to externalize
         "@tavily/core",
         "onnxruntime-node",
         "sharp",
+        "better-sqlite3",
+        "@anush008/tokenizers"
     ],
+    noExternal: [/@elizaos\/.*/]
 });

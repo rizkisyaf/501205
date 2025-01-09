@@ -1328,3 +1328,76 @@ export enum TranscriptionProvider {
     Deepgram = "deepgram",
     Local = "local",
 }
+
+export enum OrderType {
+    MARKET = "MARKET",
+    LIMIT = "LIMIT"
+}
+
+export enum PositionAction {
+    OPEN = "OPEN",
+    CLOSE = "CLOSE"
+}
+
+export enum PositionMode {
+    ONEWAY = "ONEWAY",
+    HEDGE = "HEDGE"
+}
+
+export enum PriceType {
+    MidPrice = "MidPrice",
+    BestBid = "BestBid",
+    BestAsk = "BestAsk"
+}
+
+export enum TradeType {
+    BUY = "BUY",
+    SELL = "SELL"
+}
+
+export interface StrategyConfig {
+    name: string;
+    description: string;
+    version: string;
+    enabled: boolean;
+    settings?: Record<string, any>;
+}
+
+export abstract class BaseStrategy {
+    protected config: StrategyConfig;
+    protected connectors: Record<string, any>;
+    protected marketDataProvider: any;
+
+    constructor(config: StrategyConfig) {
+        this.config = config;
+    }
+
+    abstract onTick(): Promise<void>;
+
+    async initialize(): Promise<void> {
+        // Base initialization logic
+    }
+
+    protected isPerpetual(connectorName: string): boolean {
+        return connectorName.toLowerCase().includes('perpetual');
+    }
+
+    protected async getExecutors(executorIds: string[]): Promise<any[]> {
+        // Implementation would depend on the actual executor system
+        return [];
+    }
+
+    protected async createPositionExecutor(params: {
+        connectorName: string;
+        tradingPair: string;
+        side: TradeType;
+        leverage: number;
+        amount: number;
+    }): Promise<any> {
+        // Implementation would depend on the actual executor system
+        return {
+            id: Math.random().toString(),
+            close: async () => {}
+        };
+    }
+}

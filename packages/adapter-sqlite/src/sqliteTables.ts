@@ -1,4 +1,4 @@
-export const sqliteTables = `
+export const tables = `
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
 

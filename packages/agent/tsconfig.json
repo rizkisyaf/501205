@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ESNext"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    {
+      "path": "../core"
+    }
+  ]
+} 
